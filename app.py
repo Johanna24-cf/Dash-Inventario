@@ -26,33 +26,87 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─── Estilos ──────────────────────────────────────────────────────────────────
+# ─── Estilos — Tema claro Cargoflex ──────────────────────────────────────────
 st.markdown("""
 <style>
-  [data-testid="stAppViewContainer"] { background: #0F1117; }
-  [data-testid="stSidebar"] { background: #161B22; border-right: 1px solid #21262D; }
-  .metric-card {
-    background: #161B22; border: 1px solid #21262D; border-radius: 10px;
-    padding: 16px 20px; text-align: center;
+  /* Fondo general blanco */
+  [data-testid="stAppViewContainer"] { background: #F7F9F7; }
+  [data-testid="stMain"] { background: #F7F9F7; }
+
+  /* Sidebar verde oscuro estilo Cargoflex */
+  [data-testid="stSidebar"] {
+    background: #1A4731;
+    border-right: 1px solid #145229;
   }
-  .metric-label { font-size: 12px; color: #8B949E; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .5px; }
+  [data-testid="stSidebar"] * { color: #E8F5E9 !important; }
+  [data-testid="stSidebar"] .stSelectbox label { color: #A5D6A7 !important; font-size: 13px !important; }
+  [data-testid="stSidebar"] select { background: #145229 !important; color: #E8F5E9 !important; border: 1px solid #2E7D52 !important; }
+  [data-testid="stSidebar"] hr { border-color: #2E7D52 !important; }
+  [data-testid="stSidebar"] button { background: #2E7D52 !important; color: white !important; border-radius: 6px !important; }
+
+  /* Cards de KPI */
+  .metric-card {
+    background: #FFFFFF;
+    border: 1px solid #C8E6C9;
+    border-radius: 10px;
+    padding: 16px 20px;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .metric-label {
+    font-size: 11px; color: #5F8B6E; margin: 0 0 6px;
+    text-transform: uppercase; letter-spacing: .5px; font-weight: 600;
+  }
   .metric-value { font-size: 28px; font-weight: 700; margin: 0; line-height: 1.2; }
-  .metric-sub   { font-size: 11px; color: #6E7681; margin: 4px 0 0; }
-  .c-ok   { color: #3FB950; }
-  .c-warn { color: #D29922; }
-  .c-err  { color: #F85149; }
-  .c-neu  { color: #E6EDF3; }
+  .metric-sub   { font-size: 11px; color: #8DAF96; margin: 4px 0 0; }
+
+  /* Colores semáforo */
+  .c-ok   { color: #2E7D32; }
+  .c-warn { color: #E65100; }
+  .c-err  { color: #C62828; }
+  .c-neu  { color: #1A4731; }
+
+  /* Alertas */
   .alert-box {
     border-radius: 8px; padding: 12px 16px;
     display: flex; gap: 10px; margin-bottom: 10px;
   }
-  .alert-red  { background: rgba(248,81,73,0.12); border-left: 3px solid #F85149; }
-  .alert-warn { background: rgba(210,153,34,0.12); border-left: 3px solid #D29922; }
-  .alert-title { font-size: 13px; font-weight: 600; margin: 0 0 3px; }
-  .alert-body  { font-size: 12px; color: #8B949E; margin: 0; }
-  .section-title { font-size: 13px; font-weight: 600; color: #8B949E;
-    text-transform: uppercase; letter-spacing: .5px; margin: 20px 0 10px; }
-  div[data-testid="stSelectbox"] label { font-size: 13px !important; color: #8B949E !important; }
+  .alert-red  { background: #FFEBEE; border-left: 3px solid #C62828; }
+  .alert-warn { background: #FFF3E0; border-left: 3px solid #E65100; }
+  .alert-title { font-size: 13px; font-weight: 600; margin: 0 0 3px; color: #1A1A1A; }
+  .alert-body  { font-size: 12px; color: #555; margin: 0; }
+
+  /* Título de sección */
+  .section-title {
+    font-size: 12px; font-weight: 700; color: #2E7D32;
+    text-transform: uppercase; letter-spacing: .5px; margin: 20px 0 10px;
+    border-bottom: 2px solid #C8E6C9; padding-bottom: 6px;
+  }
+
+  /* Tabs */
+  [data-testid="stTabs"] [role="tab"] {
+    color: #5F8B6E !important; font-weight: 500;
+  }
+  [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+    color: #1A4731 !important; border-bottom-color: #2E7D32 !important;
+  }
+
+  /* Texto general */
+  h1, h2, h3, p, span, div { color: #1A1A1A; }
+  [data-testid="stCaption"] { color: #5F8B6E !important; }
+
+  /* Selectbox general */
+  div[data-testid="stSelectbox"] label { font-size: 13px !important; color: #2E7D32 !important; font-weight: 500 !important; }
+  div[data-testid="stSelectbox"] div[data-baseweb="select"] { border-color: #A5D6A7 !important; }
+
+  /* Botones */
+  button[kind="secondary"] { border-color: #2E7D32 !important; color: #2E7D32 !important; }
+
+  /* Tablas */
+  [data-testid="stDataFrame"] { border: 1px solid #C8E6C9; border-radius: 8px; }
+
+  /* Spinner */
+  [data-testid="stSpinner"] { color: #2E7D32 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -186,7 +240,7 @@ def alert(msg_title, msg_body, tipo="red"):
 
 
 # ─── LAYOUT PRINCIPAL ─────────────────────────────────────────────────────────
-st.markdown("## 📦 Inventario Cíclico · Cargoflex")
+st.markdown('<h2 style="color:#1A4731;font-weight:700;">📦 Inventario Cíclico · Cargoflex</h2>', unsafe_allow_html=True)
 st.caption(f"Actualizado cada 5 min · {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
 # Cargar datos
@@ -364,9 +418,9 @@ with tab1:
         cob = cob.sort_values("% Cobertura", ascending=True)
 
         def color_cob(p):
-            if p >= 50: return "#3FB950"
-            if p >= 10: return "#D29922"
-            return "#F85149"
+            if p >= 50: return "#2E7D32"
+            if p >= 10: return "#E65100"
+            return "#C62828"
 
         cob["Color"] = cob["% Cobertura"].apply(color_cob)
 
@@ -387,10 +441,10 @@ with tab1:
         fig.update_layout(
             barmode="stack",
             xaxis=dict(title="% Cobertura", range=[0, 100], ticksuffix="%",
-                       gridcolor="#21262D", color="#8B949E"),
-            yaxis=dict(color="#8B949E"),
-            plot_bgcolor="#0F1117", paper_bgcolor="#0F1117",
-            font=dict(color="#E6EDF3", size=11),
+                       gridcolor="#E8F5E9", color="#5F8B6E"),
+            yaxis=dict(color="#5F8B6E"),
+            plot_bgcolor="#FFFFFF", paper_bgcolor="#F7F9F7",
+            font=dict(color="#1A1A1A", size=11),
             height=max(400, len(cob) * 28 + 80),
             margin=dict(l=10, r=10, t=30, b=10),
         )
@@ -425,7 +479,7 @@ with tab2:
         res["Exactitud"] = (res["OK"] / res["Contados"] * 100).where(res["Contados"] > 0).round(1)
         res = res.dropna(subset=["Exactitud"]).sort_values("Exactitud", ascending=True)
         res["Color"] = res["Exactitud"].apply(
-            lambda x: "#3FB950" if x >= 85 else ("#D29922" if x >= 60 else "#F85149")
+            lambda x: "#2E7D32" if x >= 85 else ("#E65100" if x >= 60 else "#C62828")
         )
 
         fig = px.bar(
@@ -438,16 +492,16 @@ with tab2:
         fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
         fig.update_layout(
             xaxis=dict(title="Exactitud %", range=[0, 110], ticksuffix="%",
-                       gridcolor="#21262D", color="#8B949E"),
-            yaxis=dict(color="#8B949E"),
-            plot_bgcolor="#0F1117", paper_bgcolor="#0F1117",
-            font=dict(color="#E6EDF3", size=11),
+                       gridcolor="#E8F5E9", color="#5F8B6E"),
+            yaxis=dict(color="#5F8B6E"),
+            plot_bgcolor="#FFFFFF", paper_bgcolor="#F7F9F7",
+            font=dict(color="#1A1A1A", size=11),
             showlegend=False,
             height=max(400, len(res) * 30 + 80),
             margin=dict(l=10, r=80, t=30, b=10),
         )
-        fig.add_vline(x=85, line_dash="dot", line_color="#3FB950", opacity=0.5,
-                      annotation_text="Meta 85%", annotation_font_color="#3FB950")
+        fig.add_vline(x=85, line_dash="dot", line_color="#2E7D32", opacity=0.5,
+                      annotation_text="Meta 85%", annotation_font_color="#2E7D32")
         st.plotly_chart(fig, use_container_width=True)
 
         with st.expander("Ver tabla detallada"):
@@ -469,29 +523,29 @@ with tab3:
         diario.columns = ["Fecha", "Total", "Contados"]
         diario["% Cumplimiento"] = (diario["Contados"] / diario["Total"] * 100).round(1)
         diario["Color"] = diario["% Cumplimiento"].apply(
-            lambda x: "#F85149" if x == 0 else ("#D29922" if x < 80 else "#3FB950")
+            lambda x: "#C62828" if x == 0 else ("#E65100" if x < 80 else "#2E7D32")
         )
 
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=diario["Fecha"], y=diario["% Cumplimiento"],
             mode="lines+markers",
-            line=dict(color="#7C3AED", width=2),
-            fill="tozeroy", fillcolor="rgba(124,58,237,0.08)",
+            line=dict(color="#2E7D32", width=2),
+            fill="tozeroy", fillcolor="rgba(46,125,50,0.08)",
             marker=dict(
                 color=diario["Color"], size=8, line=dict(color="#0F1117", width=1)
             ),
             hovertemplate="<b>%{x}</b><br>Cumplimiento: %{y:.1f}%<extra></extra>",
             name="Cumplimiento",
         ))
-        fig.add_hline(y=80, line_dash="dot", line_color="#3FB950", opacity=0.5,
-                      annotation_text="Meta 80%", annotation_font_color="#3FB950")
+        fig.add_hline(y=80, line_dash="dot", line_color="#2E7D32", opacity=0.5,
+                      annotation_text="Meta 80%", annotation_font_color="#2E7D32")
         fig.update_layout(
-            xaxis=dict(title="", gridcolor="#21262D", color="#8B949E"),
+            xaxis=dict(title="", gridcolor="#E8F5E9", color="#5F8B6E"),
             yaxis=dict(title="% Cumplimiento", range=[0, 105], ticksuffix="%",
-                       gridcolor="#21262D", color="#8B949E"),
-            plot_bgcolor="#0F1117", paper_bgcolor="#0F1117",
-            font=dict(color="#E6EDF3", size=11),
+                       gridcolor="#E8F5E9", color="#5F8B6E"),
+            plot_bgcolor="#FFFFFF", paper_bgcolor="#F7F9F7",
+            font=dict(color="#1A1A1A", size=11),
             showlegend=False, height=380,
             margin=dict(l=10, r=10, t=10, b=10),
         )
@@ -521,7 +575,7 @@ with tab4:
         fig.add_trace(go.Bar(
             x=ev["Fecha"], y=ev["Contados"],
             name="Filas contadas",
-            marker_color="rgba(56,139,253,0.25)",
+            marker_color="rgba(46,125,50,0.20)",
             yaxis="y2",
             hovertemplate="<b>%{x}</b><br>Filas: %{y}<extra></extra>",
         ))
@@ -529,18 +583,18 @@ with tab4:
             x=ev["Fecha"], y=ev["Exactitud"],
             name="Exactitud %",
             mode="lines+markers",
-            line=dict(color="#388BFD", width=2),
-            marker=dict(color="#388BFD", size=6),
+            line=dict(color="#1A4731", width=2),
+            marker=dict(color="#1A4731", size=6),
             hovertemplate="<b>%{x}</b><br>Exactitud: %{y:.1f}%<extra></extra>",
         ))
         fig.update_layout(
-            xaxis=dict(gridcolor="#21262D", color="#8B949E"),
+            xaxis=dict(gridcolor="#E8F5E9", color="#5F8B6E"),
             yaxis=dict(title="Exactitud %", range=[0, 105], ticksuffix="%",
-                       gridcolor="#21262D", color="#8B949E"),
+                       gridcolor="#E8F5E9", color="#5F8B6E"),
             yaxis2=dict(title="Filas contadas", overlaying="y", side="right",
-                        color="#8B949E", gridcolor="rgba(0,0,0,0)"),
-            plot_bgcolor="#0F1117", paper_bgcolor="#0F1117",
-            font=dict(color="#E6EDF3", size=11),
+                        color="#5F8B6E", gridcolor="rgba(0,0,0,0)"),
+            plot_bgcolor="#FFFFFF", paper_bgcolor="#F7F9F7",
+            font=dict(color="#1A1A1A", size=11),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, bgcolor="rgba(0,0,0,0)"),
             height=380, margin=dict(l=10, r=10, t=40, b=10),
         )
