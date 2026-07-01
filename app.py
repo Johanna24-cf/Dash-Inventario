@@ -34,9 +34,22 @@ st.markdown("""
   [data-testid="stMain"] { background: #F7F9F7; }
   [data-testid="stSidebar"] { background: #1A4731; border-right: 1px solid #145229; }
   [data-testid="stSidebar"] * { color: #E8F5E9 !important; }
-  [data-testid="stSidebar"] select { background: #145229 !important; color: #E8F5E9 !important; border: 1px solid #2E7D52 !important; }
+  /* Selectbox dropdown */
+  [data-testid="stSidebar"] [data-baseweb="select"] > div { 
+    background: #145229 !important; border: 1px solid #4CAF50 !important; 
+    color: #E8F5E9 !important; 
+  }
+  [data-testid="stSidebar"] [data-baseweb="select"] span { color: #E8F5E9 !important; }
+  [data-testid="stSidebar"] [data-baseweb="select"] svg { fill: #A5D6A7 !important; }
+  /* Input text inside select */
+  [data-testid="stSidebar"] input { background: #145229 !important; color: #E8F5E9 !important; }
+  [data-testid="stSidebar"] [role="listbox"] { background: #145229 !important; }
+  [data-testid="stSidebar"] [role="option"] { color: #E8F5E9 !important; }
   [data-testid="stSidebar"] hr { border-color: #2E7D52 !important; }
   [data-testid="stSidebar"] button { background: #2E7D52 !important; color: white !important; border-radius: 6px !important; }
+  [data-testid="stSidebar"] label { color: #A5D6A7 !important; font-size: 13px !important; font-weight: 600 !important; }
+  [data-testid="stSidebar"] p { color: #C8E6C9 !important; font-size: 12px !important; }
+  [data-testid="stSidebar"] h3 { color: #FFFFFF !important; font-size: 16px !important; }
   .metric-card {
     background: #FFFFFF; border: 1px solid #C8E6C9; border-radius: 10px;
     padding: 16px 20px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
@@ -372,48 +385,7 @@ with cols[5]:
 
 st.divider()
 
-# ─── ALERTAS ──────────────────────────────────────────────────────────────────
-if "Cliente" in df.columns and "Estado" in df.columns and len(df) > 0:
-    res_cli = df.groupby("Cliente").apply(
-        lambda x: pd.Series({
-            "ok": (x["Estado"] == "✅ OK").sum(),
-            "contados": (x["Estado"] != "⏳ Pendiente").sum(),
-            "pendientes": (x["Estado"] == "⏳ Pendiente").sum(),
-            "total": len(x),
-        })
-    ).reset_index()
-    res_cli["exactitud"] = res_cli.apply(
-        lambda r: r["ok"] / r["contados"] * 100 if r["contados"] > 0 else None, axis=1
-    )
-    criticos   = res_cli[res_cli["exactitud"] < 20].sort_values("exactitud")
-    sin_conteo = res_cli[res_cli["contados"] == 0]
-
-    for _, row in criticos.iterrows():
-        alert(
-            f"{row['Cliente']}: exactitud crítica de {row['exactitud']:.0f}%",
-            f"{row['ok']} OK de {row['contados']} contados. Revisar si hay error de ubicación en WMS.",
-            "red"
-        )
-    if not sin_conteo.empty:
-        nombres = ", ".join(sin_conteo["Cliente"].tolist()[:5])
-        alert(
-            f"{len(sin_conteo)} cliente(s) sin ningún conteo en el período",
-            f"{nombres}{'...' if len(sin_conteo) > 5 else ''}. Verificar rotación en ROTACION sheet.",
-            "warn"
-        )
-    if "Fecha" in df.columns:
-        dias_0 = df.groupby(df["Fecha"].dt.date).apply(
-            lambda x: (x["Estado"] != "⏳ Pendiente").sum() == 0
-        )
-        n_dias_0 = dias_0.sum()
-        if n_dias_0 > 0:
-            fechas_0 = ", ".join([d.strftime("%d/%m") for d in dias_0[dias_0].index])
-            alert(
-                f"{n_dias_0} día(s) con 0% de cumplimiento",
-                f"Fechas: {fechas_0}. La lista se generó pero nadie registró conteos.",
-                "red"
-            )
-
+# Insights se muestran al final — ver sección INSIGHTS más abajo
 st.divider()
 
 # ─── TABS ─────────────────────────────────────────────────────────────────────
@@ -742,6 +714,86 @@ with tab6:
                         f"{', '.join(str(s) for s in siempre_0[:5])}{'...' if len(siempre_0) > 5 else ''}. "
                         "Posibles SKUs descontinuados activos en el sistema."
                     )
+
+# ─── INSIGHTS ────────────────────────────────────────────────────────────────
+st.divider()
+st.markdown('<p class="section-title">💡 Insights del período</p>', unsafe_allow_html=True)
+
+if "Cliente" in df.columns and "Estado" in df.columns and len(df) > 0:
+    res_cli = df.groupby("Cliente").apply(
+        lambda x: pd.Series({
+            "ok": (x["Estado"] == "✅ OK").sum(),
+            "contados": (x["Estado"] != "⏳ Pendiente").sum(),
+            "pendientes": (x["Estado"] == "⏳ Pendiente").sum(),
+            "total": len(x),
+        })
+    ).reset_index()
+    res_cli["exactitud"] = res_cli.apply(
+        lambda r: r["ok"] / r["contados"] * 100 if r["contados"] > 0 else None, axis=1
+    )
+
+    hay_insights = False
+
+    # Exactitud crítica por ubicación
+    criticos = res_cli[res_cli["exactitud"] < 20].sort_values("exactitud")
+    for _, row in criticos.iterrows():
+        alert(
+            f"{row['Cliente']}: exactitud por ubicación crítica de {row['exactitud']:.0f}%",
+            f"{row['ok']} OK de {row['contados']} contados. Verificar si hay error de ubicación en WMS — "
+            f"el stock puede existir pero estar registrado en otra ubicación.",
+            "red"
+        )
+        hay_insights = True
+
+    # Clientes con todo pendiente (salieron en la lista pero nadie contó)
+    # Estos SÍ aparecen en el historial pero con estado pendiente en todas sus filas
+    todo_pendiente = res_cli[(res_cli["contados"] == 0) & (res_cli["total"] > 0)]
+    if not todo_pendiente.empty:
+        nombres = ", ".join(todo_pendiente["Cliente"].tolist()[:5])
+        extra = f" y {len(todo_pendiente)-5} más" if len(todo_pendiente) > 5 else ""
+        alert(
+            f"{len(todo_pendiente)} cliente(s) generados pero sin conteo registrado",
+            f"{nombres}{extra}. Estos clientes aparecieron en la lista del día pero el operario "
+            f"no registró ningún resultado. Verificar si se completó el cierre del día.",
+            "warn"
+        )
+        hay_insights = True
+
+    # Días con 0% cumplimiento
+    if "Fecha" in df.columns:
+        dias_0 = df.groupby(df["Fecha"].dt.date).apply(
+            lambda x: (x["Estado"] != "⏳ Pendiente").sum() == 0
+        )
+        n_dias_0 = dias_0.sum()
+        if n_dias_0 > 0:
+            fechas_0 = ", ".join([d.strftime("%d/%m") for d in dias_0[dias_0].index])
+            alert(
+                f"{n_dias_0} día(s) con 0% de cumplimiento",
+                f"Fechas: {fechas_0}. La lista se generó pero nadie registró conteos ese día.",
+                "red"
+            )
+            hay_insights = True
+
+    # MAXELL: patrón de error de ubicación (suma neta ≠ suma absoluta)
+    if "Código SKU" in df.columns and "Diferencia" in df.columns:
+        df_aj = df[df["Estado"] == "❌ Ajuste"].copy()
+        df_aj["Diferencia_num"] = pd.to_numeric(df_aj["Diferencia"], errors="coerce")
+        for cli in df_aj["Cliente"].unique():
+            df_cli = df_aj[df_aj["Cliente"] == cli]
+            neto   = df_cli["Diferencia_num"].sum()
+            absol  = df_cli["Diferencia_num"].abs().sum()
+            if absol > 0 and abs(neto) / absol < 0.3 and len(df_cli) >= 5:
+                alert(
+                    f"{cli}: patrón de error de ubicación detectado",
+                    f"La suma neta de diferencias es {neto:+.0f} pero la suma absoluta es {absol:.0f}. "
+                    f"Esto sugiere que el stock existe pero está en ubicaciones distintas a las del WMS — "
+                    f"no es un faltante real.",
+                    "warn"
+                )
+                hay_insights = True
+
+    if not hay_insights:
+        st.success("✅ No se detectaron alertas críticas en el período seleccionado.")
 
 # ─── FOOTER ───────────────────────────────────────────────────────────────────
 st.divider()
