@@ -160,7 +160,7 @@ def cargar_historial(clientes_validos):
     if "Contado" in df.columns:
         df["Contado"] = pd.to_numeric(df["Contado"], errors="coerce")
     if "Diferencia" in df.columns:
-    df["Diferencia"] = pd.to_numeric(df["Diferencia"], errors="coerce")
+        df["Diferencia"] = pd.to_numeric(df["Diferencia"], errors="coerce")
 
     return df
 
