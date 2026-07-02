@@ -210,16 +210,18 @@ def calcular_exactitud_sku(df):
     if df_cont.empty:
         return 0, 0, 0
 
-    # Agrupar por código SKU — suma todo el contado y todo el WMS del código
-    # independientemente de ubicación y UA
     por_sku = df_cont.groupby(["Código SKU", "Cliente"]).agg(
         total_contado=("Contado", "sum"),
         total_wms=("Stock WMS", "sum"),
     ).reset_index()
 
+    # ERI porcentual: 1 - |diferencia| / WMS por SKU
+    por_sku = por_sku[por_sku["total_wms"] > 0]  # evitar división por cero
+    por_sku["eri"] = (1 - (por_sku["total_contado"] - por_sku["total_wms"]).abs() / por_sku["total_wms"]).clip(lower=0)
+
     total_skus = len(por_sku)
-    skus_ok = (abs(por_sku["total_contado"] - por_sku["total_wms"]) < 0.01).sum()
-    exactitud  = (skus_ok / total_skus * 100) if total_skus > 0 else 0
+    exactitud  = (por_sku["eri"].mean() * 100) if total_skus > 0 else 0
+    skus_ok    = (por_sku["eri"] >= 0.95).sum()  # SKUs con ≥95% de exactitud
     return exactitud, skus_ok, total_skus
 
 
@@ -535,16 +537,19 @@ with tab3:
         if df_cont_sku.empty:
             st.info("No hay conteos registrados aún.")
         else:
-            por_sku = df_cont_sku.groupby(["Código SKU", "Cliente"]).agg(
-                Total_contado=("Contado", "sum"),
-                Total_WMS=("Stock WMS", "sum"),
-                Ubicaciones=("Ubicación", "nunique") if "Ubicación" in df_cont_sku.columns else ("Código SKU", "count"),
-                UAs=("UA", "nunique") if "UA" in df_cont_sku.columns else ("Código SKU", "count"),
-            ).reset_index()
-            por_sku["Diferencia"] = por_sku["Total_contado"] - por_sku["Total_WMS"]
-            por_sku["Estado SKU"] = por_sku["Diferencia"].apply(
-                lambda d: "✅ OK" if d == 0 else ("⚠ Revisar" if abs(d) <= 2 else "❌ Ajuste")
-            )
+              por_sku = df_cont_sku.groupby(["Código SKU", "Cliente"]).agg(
+                  Total_contado=("Contado", "sum"),
+                  Total_WMS=("Stock WMS", "sum"),
+                  Ubicaciones=("Ubicación", "nunique") if "Ubicación" in df_cont_sku.columns else ("Código SKU", "count"),
+                  UAs=("UA", "nunique") if "UA" in df_cont_sku.columns else ("Código SKU", "count"),
+              ).reset_index()
+              por_sku["Diferencia"] = por_sku["Total_contado"] - por_sku["Total_WMS"]
+              por_sku = por_sku[por_sku["Total_WMS"] > 0]
+              por_sku["ERI %"] = ((1 - por_sku["Diferencia"].abs() / por_sku["Total_WMS"]).clip(lower=0) * 100).round(1)
+              por_sku["Estado SKU"] = por_sku["ERI %"].apply(
+                  lambda x: "✅ OK" if x >= 95 else ("⚠ Revisar" if x >= 80 else "❌ Ajuste")
+              )
+
 
             # Resumen por cliente
             res_cli_sku = por_sku.groupby("Cliente").apply(
