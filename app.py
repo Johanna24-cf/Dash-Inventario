@@ -537,19 +537,18 @@ with tab3:
         if df_cont_sku.empty:
             st.info("No hay conteos registrados aún.")
         else:
-              por_sku = df_cont_sku.groupby(["Código SKU", "Cliente"]).agg(
-                  Total_contado=("Contado", "sum"),
-                  Total_WMS=("Stock WMS", "sum"),
-                  Ubicaciones=("Ubicación", "nunique") if "Ubicación" in df_cont_sku.columns else ("Código SKU", "count"),
-                  UAs=("UA", "nunique") if "UA" in df_cont_sku.columns else ("Código SKU", "count"),
-              ).reset_index()
-              por_sku["Diferencia"] = por_sku["Total_contado"] - por_sku["Total_WMS"]
-              por_sku = por_sku[por_sku["Total_WMS"] > 0]
-              por_sku["ERI %"] = ((1 - por_sku["Diferencia"].abs() / por_sku["Total_WMS"]).clip(lower=0) * 100).round(1)
-              por_sku["Estado SKU"] = por_sku["ERI %"].apply(
-                  lambda x: "✅ OK" if x >= 95 else ("⚠ Revisar" if x >= 80 else "❌ Ajuste")
-              )
-
+            por_sku = df_cont_sku.groupby(["Código SKU", "Cliente"]).agg(
+                Total_contado=("Contado", "sum"),
+                Total_WMS=("Stock WMS", "sum"),
+                Ubicaciones=("Ubicación", "nunique") if "Ubicación" in df_cont_sku.columns else ("Código SKU", "count"),
+                UAs=("UA", "nunique") if "UA" in df_cont_sku.columns else ("Código SKU", "count"),
+            ).reset_index()
+            por_sku["Diferencia"] = por_sku["Total_contado"] - por_sku["Total_WMS"]
+            por_sku = por_sku[por_sku["Total_WMS"] > 0]
+            por_sku["ERI %"] = ((1 - por_sku["Diferencia"].abs() / por_sku["Total_WMS"]).clip(lower=0) * 100).round(1)
+            por_sku["Estado SKU"] = por_sku["ERI %"].apply(
+                lambda x: "✅ OK" if x >= 95 else ("⚠ Revisar" if x >= 80 else "❌ Ajuste")
+            )
 
             # Resumen por cliente
             res_cli_sku = por_sku.groupby("Cliente").apply(
