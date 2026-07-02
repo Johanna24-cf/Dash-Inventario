@@ -1,5 +1,5 @@
 """
-Dashboard Inventario Cíclico — Cargoflex
+Dashboard Inventario Cíclico — Cargoflex Supply
 =========================================
 Lee en tiempo real desde dos Google Sheets:
   - HISTORIAL-INVENTARIO-CICLICO (pestañas HIST_AAAA_MM)
@@ -259,7 +259,7 @@ def alert(title, body, tipo="red"):
 
 
 # ─── LAYOUT ───────────────────────────────────────────────────────────────────
-st.markdown('<h2 style="color:#1A4731;font-weight:700;">📦 Inventario Cíclico · Cargoflex</h2>',
+st.markdown('<h2 style="color:#1A4731;font-weight:700;">📦 Inventario Cíclico · Cargoflex Supply</h2>',
             unsafe_allow_html=True)
 st.caption(f"Actualizado cada 5 min · {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
