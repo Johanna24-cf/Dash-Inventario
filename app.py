@@ -21,7 +21,7 @@ import re
 
 # ─── Configuración de página ──────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Inventario Cíclico · Cargoflex",
+    page_title="Inventario Cíclico · Cargoflex Supply",
     page_icon="📦",
     layout="wide",
     initial_sidebar_state="expanded",
