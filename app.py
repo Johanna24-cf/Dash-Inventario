@@ -159,6 +159,8 @@ def cargar_historial(clientes_validos):
         df["Stock WMS"] = pd.to_numeric(df["Stock WMS"], errors="coerce").fillna(0)
     if "Contado" in df.columns:
         df["Contado"] = pd.to_numeric(df["Contado"], errors="coerce")
+    if "Diferencia" in df.columns:
+    df["Diferencia"] = pd.to_numeric(df["Diferencia"], errors="coerce")
 
     return df
 
@@ -216,7 +218,7 @@ def calcular_exactitud_sku(df):
     ).reset_index()
 
     total_skus = len(por_sku)
-    skus_ok    = (por_sku["total_contado"] == por_sku["total_wms"]).sum()
+    skus_ok = (abs(por_sku["total_contado"] - por_sku["total_wms"]) < 0.01).sum()
     exactitud  = (skus_ok / total_skus * 100) if total_skus > 0 else 0
     return exactitud, skus_ok, total_skus
 
