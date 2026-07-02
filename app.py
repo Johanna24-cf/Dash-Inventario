@@ -553,15 +553,15 @@ with tab3:
             # Resumen por cliente
             res_cli_sku = por_sku.groupby("Cliente").apply(
                 lambda x: pd.Series({
-                    "SKUs OK": (x["Estado SKU"] == "✅ OK").sum(),
-                    "SKUs Revisar": (x["Estado SKU"] == "⚠ Revisar").sum(),
-                    "SKUs Ajuste": (x["Estado SKU"] == "❌ Ajuste").sum(),
+                    "SKUs OK": (x["ERI %"] >= 95).sum(),
+                    "SKUs Revisar": ((x["ERI %"] >= 80) & (x["ERI %"] < 95)).sum(),
+                    "SKUs Ajuste": (x["ERI %"] < 80).sum(),
                     "Total SKUs": len(x),
+                    "ERI promedio": x["ERI %"].mean().round(1),
                 })
             ).reset_index()
-            res_cli_sku["Exactitud SKU"] = (
-                res_cli_sku["SKUs OK"] / res_cli_sku["Total SKUs"] * 100
-            ).round(1)
+            # ERI porcentual = promedio del ERI de todos los SKUs del cliente
+            res_cli_sku["Exactitud SKU"] = res_cli_sku["ERI promedio"]
             res_cli_sku = res_cli_sku.sort_values("Exactitud SKU", ascending=True)
 
             fig = px.bar(
