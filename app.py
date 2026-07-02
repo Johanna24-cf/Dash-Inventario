@@ -201,28 +201,23 @@ def calcular_exactitud_ubicacion(df):
 
 
 def calcular_exactitud_sku(df):
-    """
-    Exactitud por SKU: suma contado total del código vs suma stock WMS total.
-    Si contado_total == stock_wms_total → SKU OK (aunque ubicaciones no coincidan).
-    Solo considera SKUs que tengan al menos 1 fila contada (no toda pendiente).
-    """
     if "Código SKU" not in df.columns or "Stock WMS" not in df.columns or "Contado" not in df.columns:
         return 0, 0, 0
 
-    # Solo filas con conteo registrado
     df_cont = df[df["Contado"].notna()].copy()
     if df_cont.empty:
         return 0, 0, 0
 
-    # Agrupar por código SKU
-    por_sku = df_cont.groupby("Código SKU").agg(
+    # Agrupar por código SKU — suma todo el contado y todo el WMS del código
+    # independientemente de ubicación y UA
+    por_sku = df_cont.groupby(["Código SKU", "Cliente"]).agg(
         total_contado=("Contado", "sum"),
         total_wms=("Stock WMS", "sum"),
     ).reset_index()
 
-    total_skus  = len(por_sku)
-    skus_ok     = (por_sku["total_contado"] == por_sku["total_wms"]).sum()
-    exactitud   = (skus_ok / total_skus * 100) if total_skus > 0 else 0
+    total_skus = len(por_sku)
+    skus_ok    = (por_sku["total_contado"] == por_sku["total_wms"]).sum()
+    exactitud  = (skus_ok / total_skus * 100) if total_skus > 0 else 0
     return exactitud, skus_ok, total_skus
 
 
@@ -542,6 +537,7 @@ with tab3:
                 Total_contado=("Contado", "sum"),
                 Total_WMS=("Stock WMS", "sum"),
                 Ubicaciones=("Ubicación", "nunique") if "Ubicación" in df_cont_sku.columns else ("Código SKU", "count"),
+                UAs=("UA", "nunique") if "UA" in df_cont_sku.columns else ("Código SKU", "count"),
             ).reset_index()
             por_sku["Diferencia"] = por_sku["Total_contado"] - por_sku["Total_WMS"]
             por_sku["Estado SKU"] = por_sku["Diferencia"].apply(
@@ -586,7 +582,7 @@ with tab3:
 
             with st.expander("Ver detalle por código SKU"):
                 st.dataframe(
-                    por_sku[["Código SKU","Cliente","Total_WMS","Total_contado","Diferencia","Ubicaciones","Estado SKU"]]
+                    por_sku[["Código SKU","Cliente","Total_WMS","Total_contado","Diferencia","Ubicaciones","UAs","Estado SKU"]]
                     .sort_values("Diferencia", key=abs, ascending=False),
                     use_container_width=True, hide_index=True,
                 )
