@@ -689,16 +689,26 @@ with tab6:
         else:
             if "Diferencia" in ajustes_df.columns:
                 ajustes_df["Diferencia"] = pd.to_numeric(ajustes_df["Diferencia"], errors="coerce")
-            top = ajustes_df.groupby(["Código SKU", "Cliente"]).agg(
-                Veces=("Estado", "count"),
-                Dif_prom=("Diferencia", "mean") if "Diferencia" in ajustes_df.columns else ("Estado", "count"),
-            ).reset_index().sort_values("Veces", ascending=False).head(20)
-            top.columns = ["Código SKU", "Cliente", "Veces con ajuste", "Diferencia prom."]
-            top["Diferencia prom."] = top["Diferencia prom."].round(1)
-            st.dataframe(top, use_container_width=True, hide_index=True,
+                ajustes_df["Diferencia"] = pd.to_numeric(ajustes_df["Diferencia"], errors="coerce")
+                ajustes_df["Contado"]    = pd.to_numeric(ajustes_df["Contado"],    errors="coerce")
+                ajustes_df["Stock WMS"]  = pd.to_numeric(ajustes_df["Stock WMS"],  errors="coerce").fillna(0)
+                
+                top = ajustes_df.groupby(["Código SKU", "Cliente"]).agg(
+                    Veces_ajuste        =("Estado", "count"),
+                    Total_WMS           =("Stock WMS", "sum"),
+                    Total_contado       =("Contado",   "sum"),
+                ).reset_index()
+                top["Diferencia total"] = top["Total_contado"] - top["Total_WMS"]
+                top = top.sort_values("Veces_ajuste", ascending=False).head(20)
+                top = top[["Código SKU", "Cliente", "Veces_ajuste", "Total_WMS", "Total_contado", "Diferencia total"]]
+                top.columns = ["Código SKU", "Cliente", "Veces ajuste", "Stock WMS total", "Contado total", "Diferencia total"]
+            st.dataframe(
+                top, use_container_width=True, hide_index=True,
                 column_config={
-                    "Veces con ajuste": st.column_config.NumberColumn(format="%d"),
-                    "Diferencia prom.": st.column_config.NumberColumn(format="%.1f"),
+                    "Veces ajuste"   : st.column_config.NumberColumn(format="%d"),
+                    "Stock WMS total": st.column_config.NumberColumn(format="%d"),
+                    "Contado total"  : st.column_config.NumberColumn(format="%d"),
+                    "Diferencia total": st.column_config.NumberColumn(format="%+d"),
                 }
             )
 
