@@ -683,25 +683,26 @@ with tab6:
     if "Estado" not in df.columns or "Código SKU" not in df.columns or df.empty:
         st.info("Sin datos para mostrar.")
     else:
-        ajustes_df = df[df["Estado"].isin(["❌ Ajuste", "⚠ Revisar"])].copy()
-        if ajustes_df.empty:
-            st.success("✅ No hay SKUs con ajustes en el período seleccionado.")
+        df_cont_top = df[df["Contado"].notna()].copy()
+        df_cont_top["Diferencia"] = pd.to_numeric(df_cont_top["Diferencia"], errors="coerce")
+        df_cont_top["Contado"]    = pd.to_numeric(df_cont_top["Contado"],    errors="coerce")
+        df_cont_top["Stock WMS"]  = pd.to_numeric(df_cont_top["Stock WMS"],  errors="coerce").fillna(0)
+        
+        if df_cont_top.empty:
+            st.success("✅ No hay conteos registrados en el período seleccionado.")
         else:
-            if "Diferencia" in ajustes_df.columns:
-                ajustes_df["Diferencia"] = pd.to_numeric(ajustes_df["Diferencia"], errors="coerce")
-                ajustes_df["Diferencia"] = pd.to_numeric(ajustes_df["Diferencia"], errors="coerce")
-                ajustes_df["Contado"]    = pd.to_numeric(ajustes_df["Contado"],    errors="coerce")
-                ajustes_df["Stock WMS"]  = pd.to_numeric(ajustes_df["Stock WMS"],  errors="coerce").fillna(0)
-                
-                top = ajustes_df.groupby(["Código SKU", "Cliente"]).agg(
-                    Veces_ajuste        =("Estado", "count"),
-                    Total_WMS           =("Stock WMS", "sum"),
-                    Total_contado       =("Contado",   "sum"),
-                ).reset_index()
-                top["Diferencia total"] = top["Total_contado"] - top["Total_WMS"]
-                top = top.sort_values("Veces_ajuste", ascending=False).head(20)
-                top = top[["Código SKU", "Cliente", "Veces_ajuste", "Total_WMS", "Total_contado", "Diferencia total"]]
-                top.columns = ["Código SKU", "Cliente", "Veces ajuste", "Stock WMS total", "Contado total", "Diferencia total"]
+            # Agrupar TODAS las filas contadas por SKU (no solo ajustes)
+            top = df_cont_top.groupby(["Código SKU", "Cliente"]).agg(
+                Veces_ajuste  =("Estado", lambda x: x.isin(["❌ Ajuste", "⚠ Revisar"]).sum()),
+                Total_WMS     =("Stock WMS", "sum"),
+                Total_contado =("Contado",   "sum"),
+            ).reset_index()
+            top["Diferencia total"] = top["Total_contado"] - top["Total_WMS"]
+            top["ERI %"] = ((1 - top["Diferencia total"].abs() / top["Total_WMS"]).clip(lower=0) * 100).round(1)
+            # Mostrar solo los que tienen al menos 1 ajuste, ordenados por mayor diferencia absoluta
+            top = top[top["Veces_ajuste"] > 0].sort_values("Diferencia total", key=abs, ascending=False).head(20)
+            top = top[["Código SKU", "Cliente", "Veces_ajuste", "Total_WMS", "Total_contado", "Diferencia total", "ERI %"]]
+            top.columns = ["Código SKU", "Cliente", "Veces ajuste", "Stock WMS total", "Contado total", "Diferencia total", "ERI %"]
             st.dataframe(
                 top, use_container_width=True, hide_index=True,
                 column_config={
@@ -709,6 +710,7 @@ with tab6:
                     "Stock WMS total": st.column_config.NumberColumn(format="%d"),
                     "Contado total"  : st.column_config.NumberColumn(format="%d"),
                     "Diferencia total": st.column_config.NumberColumn(format="%+d"),
+                    "ERI %"          : st.column_config.NumberColumn(format="%.1f%%"),
                 }
             )
 
