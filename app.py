@@ -604,16 +604,28 @@ with tab4:
     if "Fecha" not in df.columns or "Estado" not in df.columns or df.empty:
         st.info("Sin datos para mostrar.")
     else:
-        diario = df.groupby(df["Fecha"].dt.date).agg(
+        # Aplicar misma agrupación que evolución exactitud
+        _df_cum = df.copy()
+        if periodo_sel == "Diario":
+            _df_cum["_periodo"] = _df_cum["Fecha"].dt.date
+            _lbl_cum = "Día"
+        elif periodo_sel == "Mensual":
+            _df_cum["_periodo"] = _df_cum["Fecha"].dt.to_period("M").astype(str)
+            _lbl_cum = "Mes"
+        else:
+            _df_cum["_periodo"] = _df_cum["Fecha"].dt.year.astype(str)
+            _lbl_cum = "Año"
+
+        diario = _df_cum.groupby("_periodo").agg(
             Total=("Estado", "count"),
             Contados=("Estado", lambda x: (x != "⏳ Pendiente").sum()),
         ).reset_index()
-        diario.columns = ["Fecha", "Total", "Contados"]
+        diario.columns = ["Período", "Total", "Contados"]
         diario["% Cumplimiento"] = (diario["Contados"] / diario["Total"] * 100).round(1)
 
         fig = go.Figure()
         fig.add_trace(go.Scatter(
-            x=diario["Fecha"], y=diario["% Cumplimiento"],
+            x=diario["Período"].astype(str), y=diario["% Cumplimiento"],
             mode="lines+markers",
             line=dict(color=GREEN_MID, width=2),
             fill="tozeroy", fillcolor="rgba(46,125,50,0.08)",
@@ -627,7 +639,7 @@ with tab4:
                       annotation_text="Meta 80%", annotation_font_color=GREEN_MID)
         fig.update_layout(
             **PLOT_LIGHT,
-            xaxis=dict(title="", gridcolor=GRID_COLOR, color="#5F8B6E"),
+            xaxis=dict(title=_lbl_cum, gridcolor=GRID_COLOR, color="#5F8B6E"),
             yaxis=dict(title="% Cumplimiento", range=[0, 105],
                        ticksuffix="%", gridcolor=GRID_COLOR, color="#5F8B6E"),
             font=PLOT_FONT, showlegend=False, height=380,
@@ -636,12 +648,12 @@ with tab4:
         st.plotly_chart(fig, use_container_width=True)
 
         prom = (diario["Contados"].sum() / diario["Total"].sum() * 100)
-        dias_0 = (diario["% Cumplimiento"] == 0).sum()
+        sin_0 = (diario["% Cumplimiento"] == 0).sum()
         prom_s = diario[diario["% Cumplimiento"] > 0]["% Cumplimiento"].mean()
         c1, c2, c3 = st.columns(3)
-        c1.metric("Promedio ponderado del período", f"{prom:.1f}%")
-        c2.metric("Días con 0% cumplimiento", f"{dias_0}")
-        c3.metric("Promedio excluyendo días 0%", f"{prom_s:.1f}%" if not pd.isna(prom_s) else "—")
+        c1.metric(f"Promedio ponderado ({periodo_sel.lower()})", f"{prom:.1f}%")
+        c2.metric(f"Períodos con 0%", f"{sin_0}")
+        c3.metric(f"Promedio excluyendo 0%", f"{prom_s:.1f}%" if not pd.isna(prom_s) else "—")
 
 # ── TAB 5: EXACTITUD DIARIA ───────────────────────────────────────────────────
 with tab5:
@@ -701,17 +713,7 @@ with tab5:
 
         fig = go.Figure()
 
-        # Barras de volumen contado (eje secundario)
-        if tiene_vol:
-            fig.add_trace(go.Bar(
-                x=ev_ubic["_periodo"].astype(str), y=ev_ubic["Volumen"],
-                name="Volumen contado (un)",
-                marker_color="rgba(46,125,50,0.18)",
-                yaxis="y2",
-                hovertemplate="<b>%{x}</b><br>Volumen contado: %{y:,} un<extra></extra>",
-            ))
-
-        # Línea ERU
+        # Línea ERU — verde oscuro sólida
         fig.add_trace(go.Scatter(
             x=ev_ubic["_periodo"].astype(str), y=ev_ubic["ERU"],
             name="Exactitud ubicación (ERU) %",
@@ -721,26 +723,23 @@ with tab5:
             hovertemplate="<b>%{x}</b><br>ERU: %{y:.1f}%<extra></extra>",
         ))
 
-        # Línea ERI por SKU
+        # Línea ERI — azul sólida (color distinto)
         if tiene_eri and "ERI" in ev_ubic.columns:
             fig.add_trace(go.Scatter(
                 x=ev_ubic["_periodo"].astype(str), y=ev_ubic["ERI"],
                 name="Exactitud por SKU (ERI) %",
                 mode="lines+markers",
-                line=dict(color=GREEN_MID, width=2.5, dash="dot"),
-                marker=dict(color=GREEN_MID, size=7, symbol="diamond",
+                line=dict(color="#1565C0", width=2.5),
+                marker=dict(color="#1565C0", size=7, symbol="circle",
                             line=dict(color="white", width=1.5)),
                 hovertemplate="<b>%{x}</b><br>ERI: %{y:.1f}%<extra></extra>",
             ))
 
-        _y2_title = "Volumen contado (un)" if tiene_vol else ""
         fig.update_layout(
             **PLOT_LIGHT,
             xaxis=dict(title=_lbl_x, gridcolor=GRID_COLOR, color="#5F8B6E"),
             yaxis=dict(title="Exactitud %", range=[0, 110], ticksuffix="%",
                        gridcolor=GRID_COLOR, color="#5F8B6E"),
-            yaxis2=dict(title=_y2_title, overlaying="y", side="right",
-                        color="#5F8B6E", gridcolor="rgba(0,0,0,0)"),
             font=PLOT_FONT,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, bgcolor="rgba(0,0,0,0)"),
             height=420, margin=dict(l=10, r=10, t=50, b=10),
@@ -750,35 +749,42 @@ with tab5:
         # Mini resumen del período
         _eru_prom = ev_ubic["ERU"].mean()
         _eri_prom = ev_ubic["ERI"].mean() if tiene_eri and "ERI" in ev_ubic.columns else None
-        _vol_tot  = ev_ubic["Volumen"].sum() if tiene_vol else 0
         _c1, _c2, _c3 = st.columns(3)
         _c1.metric(f"ERU promedio ({periodo_sel.lower()})", f"{_eru_prom:.1f}%")
         if _eri_prom is not None:
             _c2.metric(f"ERI promedio ({periodo_sel.lower()})", f"{_eri_prom:.1f}%")
-        if tiene_vol:
-            _c3.metric("Volumen total contado", f"{int(_vol_tot):,} un")
 
 # ── TAB 6: TOP SKUs PROBLEMA ──────────────────────────────────────────────────
 with tab6:
     if "Estado" not in df.columns or "Código SKU" not in df.columns or df.empty:
         st.info("Sin datos para mostrar.")
     else:
-        ajustes_df = df[df["Estado"].isin(["❌ Ajuste", "⚠ Revisar"])].copy()
-        if ajustes_df.empty:
+        df_cont_top = df[df["Contado"].notna()].copy() if "Contado" in df.columns else df.copy()
+        df_cont_top["Diferencia"] = pd.to_numeric(df_cont_top.get("Diferencia", 0), errors="coerce")
+        df_cont_top["Contado"]    = pd.to_numeric(df_cont_top["Contado"], errors="coerce") if "Contado" in df_cont_top.columns else 0
+        df_cont_top["Stock WMS"]  = pd.to_numeric(df_cont_top.get("Stock WMS", 0), errors="coerce").fillna(0)
+
+        df_aj_top = df_cont_top[df_cont_top["Estado"].isin(["❌ Ajuste", "⚠ Revisar"])].copy() if "Estado" in df_cont_top.columns else df_cont_top.copy()
+
+        if df_aj_top.empty:
             st.success("✅ No hay SKUs con ajustes en el período seleccionado.")
         else:
-            if "Diferencia" in ajustes_df.columns:
-                ajustes_df["Diferencia"] = pd.to_numeric(ajustes_df["Diferencia"], errors="coerce")
-            top = ajustes_df.groupby(["Código SKU", "Cliente"]).agg(
-                Veces=("Estado", "count"),
-                Dif_prom=("Diferencia", "mean") if "Diferencia" in ajustes_df.columns else ("Estado", "count"),
-            ).reset_index().sort_values("Veces", ascending=False).head(20)
-            top.columns = ["Código SKU", "Cliente", "Veces con ajuste", "Diferencia prom."]
-            top["Diferencia prom."] = top["Diferencia prom."].round(1)
+            top = df_cont_top.groupby(["Código SKU", "Cliente"]).agg(
+                Total_WMS=("Stock WMS", "sum"),
+                Total_contado=("Contado", "sum"),
+            ).reset_index()
+            top["Diferencia total"] = top["Total_contado"] - top["Total_WMS"]
+            # Solo mostrar los que tienen ajuste
+            top_aj = df_aj_top.groupby(["Código SKU","Cliente"]).size().reset_index(name="_n")
+            top = top.merge(top_aj[["Código SKU","Cliente"]], on=["Código SKU","Cliente"])
+            top = top.sort_values("Diferencia total", key=abs, ascending=False).head(20)
+            top = top[["Código SKU","Cliente","Total_WMS","Total_contado","Diferencia total"]]
+            top.columns = ["Código SKU","Cliente","Stock WMS total","Contado total","Diferencia total"]
             st.dataframe(top, use_container_width=True, hide_index=True,
                 column_config={
-                    "Veces con ajuste": st.column_config.NumberColumn(format="%d"),
-                    "Diferencia prom.": st.column_config.NumberColumn(format="%.1f"),
+                    "Stock WMS total" : st.column_config.NumberColumn(format="%d"),
+                    "Contado total"   : st.column_config.NumberColumn(format="%d"),
+                    "Diferencia total": st.column_config.NumberColumn(format="%+d"),
                 }
             )
 
