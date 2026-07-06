@@ -1,5 +1,5 @@
 """
-Dashboard Inventario Cíclico — Cargoflex Supply
+Dashboard Inventario Cíclico — Cargoflex
 =========================================
 Lee en tiempo real desde dos Google Sheets:
   - HISTORIAL-INVENTARIO-CICLICO (pestañas HIST_AAAA_MM)
@@ -21,7 +21,7 @@ import re
 
 # ─── Configuración de página ──────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Inventario Cíclico · Cargoflex Supply",
+    page_title="Inventario Cíclico · Cargoflex",
     page_icon="📦",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -159,8 +159,6 @@ def cargar_historial(clientes_validos):
         df["Stock WMS"] = pd.to_numeric(df["Stock WMS"], errors="coerce").fillna(0)
     if "Contado" in df.columns:
         df["Contado"] = pd.to_numeric(df["Contado"], errors="coerce")
-    if "Diferencia" in df.columns:
-        df["Diferencia"] = pd.to_numeric(df["Diferencia"], errors="coerce")
 
     return df
 
@@ -203,25 +201,28 @@ def calcular_exactitud_ubicacion(df):
 
 
 def calcular_exactitud_sku(df):
+    """
+    Exactitud por SKU: suma contado total del código vs suma stock WMS total.
+    Si contado_total == stock_wms_total → SKU OK (aunque ubicaciones no coincidan).
+    Solo considera SKUs que tengan al menos 1 fila contada (no toda pendiente).
+    """
     if "Código SKU" not in df.columns or "Stock WMS" not in df.columns or "Contado" not in df.columns:
         return 0, 0, 0
 
+    # Solo filas con conteo registrado
     df_cont = df[df["Contado"].notna()].copy()
     if df_cont.empty:
         return 0, 0, 0
 
-    por_sku = df_cont.groupby(["Código SKU", "Cliente"]).agg(
+    # Agrupar por código SKU
+    por_sku = df_cont.groupby("Código SKU").agg(
         total_contado=("Contado", "sum"),
         total_wms=("Stock WMS", "sum"),
     ).reset_index()
 
-    # ERI porcentual: 1 - |diferencia| / WMS por SKU
-    por_sku = por_sku[por_sku["total_wms"] > 0]  # evitar división por cero
-    por_sku["eri"] = (1 - (por_sku["total_contado"] - por_sku["total_wms"]).abs() / por_sku["total_wms"]).clip(lower=0)
-
-    total_skus = len(por_sku)
-    exactitud  = (por_sku["eri"].mean() * 100) if total_skus > 0 else 0
-    skus_ok    = (por_sku["eri"] >= 0.95).sum()  # SKUs con ≥95% de exactitud
+    total_skus  = len(por_sku)
+    skus_ok     = (por_sku["total_contado"] == por_sku["total_wms"]).sum()
+    exactitud   = (skus_ok / total_skus * 100) if total_skus > 0 else 0
     return exactitud, skus_ok, total_skus
 
 
@@ -259,7 +260,7 @@ def alert(title, body, tipo="red"):
 
 
 # ─── LAYOUT ───────────────────────────────────────────────────────────────────
-st.markdown('<h2 style="color:#1A4731;font-weight:700;">📦 Inventario Cíclico · Cargoflex Supply</h2>',
+st.markdown('<h2 style="color:#1A4731;font-weight:700;">📦 Inventario Cíclico · Cargoflex</h2>',
             unsafe_allow_html=True)
 st.caption(f"Actualizado cada 5 min · {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
@@ -289,13 +290,21 @@ with st.sidebar:
     st.markdown("### 🔍 Filtros")
     st.divider()
 
-    # Filtro mes
-    if "Fecha" in df_hist.columns:
-        meses_disp = sorted(df_hist["Fecha"].dropna().dt.to_period("M").unique(), reverse=True)
-        meses_str  = ["Todos"] + [str(m) for m in meses_disp]
-        mes_sel    = st.selectbox("Mes", meses_str)
+    # Filtro fecha inicio / fin + agrupación
+    import datetime as _dt
+    if "Fecha" in df_hist.columns and not df_hist["Fecha"].dropna().empty:
+        _min_f = df_hist["Fecha"].min().date()
+        _max_f = df_hist["Fecha"].max().date()
     else:
-        mes_sel = "Todos"
+        _min_f = _dt.date.today() - _dt.timedelta(days=30)
+        _max_f = _dt.date.today()
+
+    fecha_ini = st.date_input("📅 Fecha inicio", value=_min_f,
+                               min_value=_min_f, max_value=_max_f, key="fini")
+    fecha_fin = st.date_input("📅 Fecha fin",    value=_max_f,
+                               min_value=_min_f, max_value=_max_f, key="ffin")
+    periodo_sel = st.radio("Agrupación", ["Diario", "Mensual", "Anual"],
+                            horizontal=True, key="periodo")
 
     # Filtro bodega
     bodegas_disp = ["Todas"]
@@ -319,8 +328,8 @@ with st.sidebar:
 
 # ─── APLICAR FILTROS ──────────────────────────────────────────────────────────
 df = df_hist.copy()
-if mes_sel != "Todos" and "Fecha" in df.columns:
-    df = df[df["Fecha"].dt.to_period("M").astype(str) == mes_sel]
+if "Fecha" in df.columns:
+    df = df[(df["Fecha"].dt.date >= fecha_ini) & (df["Fecha"].dt.date <= fecha_fin)]
 
 # Filtro bodega en historial
 if bodega_sel != "Todas" and df_wms is not None and "Familia" in df_wms.columns and "Bodega" in df_wms.columns:
@@ -392,8 +401,8 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📊 Cobertura del universo",
     "📍 Exactitud por ubicación",
     "🎯 Exactitud por SKU",
-    "📈 Cumplimiento diario",
-    "📅 Exactitud diaria",
+    "📈 Cumplimiento",
+    "📅 Evolución exactitud",
     "⚠️ Top SKUs problema",
 ])
 
@@ -541,27 +550,24 @@ with tab3:
                 Total_contado=("Contado", "sum"),
                 Total_WMS=("Stock WMS", "sum"),
                 Ubicaciones=("Ubicación", "nunique") if "Ubicación" in df_cont_sku.columns else ("Código SKU", "count"),
-                UAs=("UA", "nunique") if "UA" in df_cont_sku.columns else ("Código SKU", "count"),
             ).reset_index()
             por_sku["Diferencia"] = por_sku["Total_contado"] - por_sku["Total_WMS"]
-            por_sku = por_sku[por_sku["Total_WMS"] > 0]
-            por_sku["ERI %"] = ((1 - por_sku["Diferencia"].abs() / por_sku["Total_WMS"]).clip(lower=0) * 100).round(1)
-            por_sku["Estado SKU"] = por_sku["ERI %"].apply(
-                lambda x: "✅ OK" if x >= 95 else ("⚠ Revisar" if x >= 80 else "❌ Ajuste")
+            por_sku["Estado SKU"] = por_sku["Diferencia"].apply(
+                lambda d: "✅ OK" if d == 0 else ("⚠ Revisar" if abs(d) <= 2 else "❌ Ajuste")
             )
 
             # Resumen por cliente
             res_cli_sku = por_sku.groupby("Cliente").apply(
                 lambda x: pd.Series({
-                    "SKUs OK": (x["ERI %"] >= 95).sum(),
-                    "SKUs Revisar": ((x["ERI %"] >= 80) & (x["ERI %"] < 95)).sum(),
-                    "SKUs Ajuste": (x["ERI %"] < 80).sum(),
+                    "SKUs OK": (x["Estado SKU"] == "✅ OK").sum(),
+                    "SKUs Revisar": (x["Estado SKU"] == "⚠ Revisar").sum(),
+                    "SKUs Ajuste": (x["Estado SKU"] == "❌ Ajuste").sum(),
                     "Total SKUs": len(x),
-                    "ERI promedio": x["ERI %"].mean().round(1),
                 })
             ).reset_index()
-            # ERI porcentual = promedio del ERI de todos los SKUs del cliente
-            res_cli_sku["Exactitud SKU"] = res_cli_sku["ERI promedio"]
+            res_cli_sku["Exactitud SKU"] = (
+                res_cli_sku["SKUs OK"] / res_cli_sku["Total SKUs"] * 100
+            ).round(1)
             res_cli_sku = res_cli_sku.sort_values("Exactitud SKU", ascending=True)
 
             fig = px.bar(
@@ -588,7 +594,7 @@ with tab3:
 
             with st.expander("Ver detalle por código SKU"):
                 st.dataframe(
-                    por_sku[["Código SKU","Cliente","Total_WMS","Total_contado","Diferencia","Ubicaciones","UAs","Estado SKU"]]
+                    por_sku[["Código SKU","Cliente","Total_WMS","Total_contado","Diferencia","Ubicaciones","Estado SKU"]]
                     .sort_values("Diferencia", key=abs, ascending=False),
                     use_container_width=True, hide_index=True,
                 )
@@ -633,84 +639,146 @@ with tab4:
         dias_0 = (diario["% Cumplimiento"] == 0).sum()
         prom_s = diario[diario["% Cumplimiento"] > 0]["% Cumplimiento"].mean()
         c1, c2, c3 = st.columns(3)
-        c1.metric("Promedio ponderado", f"{prom:.1f}%")
-        c2.metric("Días con 0%", f"{dias_0}")
-        c3.metric("Promedio sin días 0%", f"{prom_s:.1f}%" if not pd.isna(prom_s) else "—")
+        c1.metric("Promedio ponderado del período", f"{prom:.1f}%")
+        c2.metric("Días con 0% cumplimiento", f"{dias_0}")
+        c3.metric("Promedio excluyendo días 0%", f"{prom_s:.1f}%" if not pd.isna(prom_s) else "—")
 
 # ── TAB 5: EXACTITUD DIARIA ───────────────────────────────────────────────────
 with tab5:
     if "Fecha" not in df.columns or "Estado" not in df.columns or df.empty:
         st.info("Sin datos para mostrar.")
     else:
-        ev = df[df["Estado"] != "⏳ Pendiente"].groupby(df["Fecha"].dt.date).agg(
+        _df_ev = df[df["Estado"] != "⏳ Pendiente"].copy()
+
+        # Agrupar según período seleccionado
+        if periodo_sel == "Diario":
+            _df_ev["_periodo"] = _df_ev["Fecha"].dt.date
+            _lbl_x = "Día"
+        elif periodo_sel == "Mensual":
+            _df_ev["_periodo"] = _df_ev["Fecha"].dt.to_period("M").astype(str)
+            _lbl_x = "Mes"
+        else:
+            _df_ev["_periodo"] = _df_ev["Fecha"].dt.year.astype(str)
+            _lbl_x = "Año"
+
+        # Calcular exactitud por ubicación y ERI por SKU por período
+        ev_ubic = _df_ev.groupby("_periodo").agg(
             Contados=("Estado", "count"),
-            OK=("Estado", lambda x: (x == "✅ OK").sum()),
+            OK_ubic=("Estado", lambda x: (x == "✅ OK").sum()),
         ).reset_index()
-        ev.columns = ["Fecha", "Contados", "OK"]
-        ev["Exactitud"] = (ev["OK"] / ev["Contados"] * 100).round(1)
+        ev_ubic["ERU"] = (ev_ubic["OK_ubic"] / ev_ubic["Contados"] * 100).round(1)
+
+        # Volumen contado = suma de Contado numérico
+        if "Contado" in _df_ev.columns:
+            _df_ev["Contado_num"] = pd.to_numeric(_df_ev["Contado"], errors="coerce").fillna(0)
+            ev_vol = _df_ev.groupby("_periodo")["Contado_num"].sum().reset_index()
+            ev_vol.columns = ["_periodo", "Volumen"]
+            ev_ubic = ev_ubic.merge(ev_vol, on="_periodo", how="left")
+            ev_ubic["Volumen"] = ev_ubic["Volumen"].fillna(0).astype(int)
+            tiene_vol = True
+        else:
+            tiene_vol = False
+
+        # ERI por SKU por período
+        if "Código SKU" in _df_ev.columns and "Stock WMS" in _df_ev.columns and "Contado" in _df_ev.columns:
+            _df_ev["Contado_num"] = pd.to_numeric(_df_ev["Contado"], errors="coerce")
+            _df_ev["Stock WMS"]   = pd.to_numeric(_df_ev["Stock WMS"], errors="coerce").fillna(0)
+            _eri_list = []
+            for _p, _grp in _df_ev.groupby("_periodo"):
+                _ps = _grp.groupby("Código SKU").agg(
+                    tc=("Contado_num","sum"), tw=("Stock WMS","sum")
+                ).reset_index()
+                _ps = _ps[_ps["tw"] > 0]
+                _ps["e"] = (1 - (_ps["tc"] - _ps["tw"]).abs() / _ps["tw"]).clip(lower=0)
+                _eri_list.append({"_periodo": _p, "ERI": round(_ps["e"].mean() * 100, 1) if len(_ps) > 0 else None})
+            ev_eri = pd.DataFrame(_eri_list)
+            ev_ubic = ev_ubic.merge(ev_eri, on="_periodo", how="left")
+            tiene_eri = True
+        else:
+            tiene_eri = False
+
+        ev_ubic = ev_ubic.sort_values("_periodo").reset_index(drop=True)
 
         fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=ev["Fecha"], y=ev["Contados"],
-            name="Filas contadas",
-            marker_color="rgba(46,125,50,0.20)",
-            yaxis="y2",
-            hovertemplate="<b>%{x}</b><br>Filas contadas: %{y}<extra></extra>",
-        ))
+
+        # Barras de volumen contado (eje secundario)
+        if tiene_vol:
+            fig.add_trace(go.Bar(
+                x=ev_ubic["_periodo"].astype(str), y=ev_ubic["Volumen"],
+                name="Volumen contado (un)",
+                marker_color="rgba(46,125,50,0.18)",
+                yaxis="y2",
+                hovertemplate="<b>%{x}</b><br>Volumen contado: %{y:,} un<extra></extra>",
+            ))
+
+        # Línea ERU
         fig.add_trace(go.Scatter(
-            x=ev["Fecha"], y=ev["Exactitud"],
-            name="Exactitud ubicación %",
+            x=ev_ubic["_periodo"].astype(str), y=ev_ubic["ERU"],
+            name="Exactitud ubicación (ERU) %",
             mode="lines+markers",
-            line=dict(color=GREEN_DARK, width=2),
-            marker=dict(color=GREEN_DARK, size=6),
-            hovertemplate="<b>%{x}</b><br>Exactitud: %{y:.1f}%<extra></extra>",
+            line=dict(color=GREEN_DARK, width=2.5),
+            marker=dict(color=GREEN_DARK, size=7, line=dict(color="white", width=1.5)),
+            hovertemplate="<b>%{x}</b><br>ERU: %{y:.1f}%<extra></extra>",
         ))
+
+        # Línea ERI por SKU
+        if tiene_eri and "ERI" in ev_ubic.columns:
+            fig.add_trace(go.Scatter(
+                x=ev_ubic["_periodo"].astype(str), y=ev_ubic["ERI"],
+                name="Exactitud por SKU (ERI) %",
+                mode="lines+markers",
+                line=dict(color=GREEN_MID, width=2.5, dash="dot"),
+                marker=dict(color=GREEN_MID, size=7, symbol="diamond",
+                            line=dict(color="white", width=1.5)),
+                hovertemplate="<b>%{x}</b><br>ERI: %{y:.1f}%<extra></extra>",
+            ))
+
+        _y2_title = "Volumen contado (un)" if tiene_vol else ""
         fig.update_layout(
             **PLOT_LIGHT,
-            xaxis=dict(gridcolor=GRID_COLOR, color="#5F8B6E"),
-            yaxis=dict(title="Exactitud %", range=[0, 105], ticksuffix="%",
+            xaxis=dict(title=_lbl_x, gridcolor=GRID_COLOR, color="#5F8B6E"),
+            yaxis=dict(title="Exactitud %", range=[0, 110], ticksuffix="%",
                        gridcolor=GRID_COLOR, color="#5F8B6E"),
-            yaxis2=dict(title="Filas contadas", overlaying="y", side="right",
+            yaxis2=dict(title=_y2_title, overlaying="y", side="right",
                         color="#5F8B6E", gridcolor="rgba(0,0,0,0)"),
             font=PLOT_FONT,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, bgcolor="rgba(0,0,0,0)"),
-            height=380, margin=dict(l=10, r=10, t=40, b=10),
+            height=420, margin=dict(l=10, r=10, t=50, b=10),
         )
         st.plotly_chart(fig, use_container_width=True)
+
+        # Mini resumen del período
+        _eru_prom = ev_ubic["ERU"].mean()
+        _eri_prom = ev_ubic["ERI"].mean() if tiene_eri and "ERI" in ev_ubic.columns else None
+        _vol_tot  = ev_ubic["Volumen"].sum() if tiene_vol else 0
+        _c1, _c2, _c3 = st.columns(3)
+        _c1.metric(f"ERU promedio ({periodo_sel.lower()})", f"{_eru_prom:.1f}%")
+        if _eri_prom is not None:
+            _c2.metric(f"ERI promedio ({periodo_sel.lower()})", f"{_eri_prom:.1f}%")
+        if tiene_vol:
+            _c3.metric("Volumen total contado", f"{int(_vol_tot):,} un")
 
 # ── TAB 6: TOP SKUs PROBLEMA ──────────────────────────────────────────────────
 with tab6:
     if "Estado" not in df.columns or "Código SKU" not in df.columns or df.empty:
         st.info("Sin datos para mostrar.")
     else:
-        df_cont_top = df[df["Contado"].notna()].copy()
-        df_cont_top["Diferencia"] = pd.to_numeric(df_cont_top["Diferencia"], errors="coerce")
-        df_cont_top["Contado"]    = pd.to_numeric(df_cont_top["Contado"],    errors="coerce")
-        df_cont_top["Stock WMS"]  = pd.to_numeric(df_cont_top["Stock WMS"],  errors="coerce").fillna(0)
-        
-        if df_cont_top.empty:
-            st.success("✅ No hay conteos registrados en el período seleccionado.")
+        ajustes_df = df[df["Estado"].isin(["❌ Ajuste", "⚠ Revisar"])].copy()
+        if ajustes_df.empty:
+            st.success("✅ No hay SKUs con ajustes en el período seleccionado.")
         else:
-            # Agrupar TODAS las filas contadas por SKU (no solo ajustes)
-            top = df_cont_top.groupby(["Código SKU", "Cliente"]).agg(
-                Veces_ajuste  =("Estado", lambda x: x.isin(["❌ Ajuste", "⚠ Revisar"]).sum()),
-                Total_WMS     =("Stock WMS", "sum"),
-                Total_contado =("Contado",   "sum"),
-            ).reset_index()
-            top["Diferencia total"] = top["Total_contado"] - top["Total_WMS"]
-            top["ERI %"] = ((1 - top["Diferencia total"].abs() / top["Total_WMS"]).clip(lower=0) * 100).round(1)
-            # Mostrar solo los que tienen al menos 1 ajuste, ordenados por mayor diferencia absoluta
-            top = top[top["Veces_ajuste"] > 0].sort_values("Diferencia total", key=abs, ascending=False).head(20)
-            top = top[["Código SKU", "Cliente", "Veces_ajuste", "Total_WMS", "Total_contado", "Diferencia total", "ERI %"]]
-            top.columns = ["Código SKU", "Cliente", "Veces ajuste", "Stock WMS total", "Contado total", "Diferencia total", "ERI %"]
-            st.dataframe(
-                top, use_container_width=True, hide_index=True,
+            if "Diferencia" in ajustes_df.columns:
+                ajustes_df["Diferencia"] = pd.to_numeric(ajustes_df["Diferencia"], errors="coerce")
+            top = ajustes_df.groupby(["Código SKU", "Cliente"]).agg(
+                Veces=("Estado", "count"),
+                Dif_prom=("Diferencia", "mean") if "Diferencia" in ajustes_df.columns else ("Estado", "count"),
+            ).reset_index().sort_values("Veces", ascending=False).head(20)
+            top.columns = ["Código SKU", "Cliente", "Veces con ajuste", "Diferencia prom."]
+            top["Diferencia prom."] = top["Diferencia prom."].round(1)
+            st.dataframe(top, use_container_width=True, hide_index=True,
                 column_config={
-                    "Veces ajuste"   : st.column_config.NumberColumn(format="%d"),
-                    "Stock WMS total": st.column_config.NumberColumn(format="%d"),
-                    "Contado total"  : st.column_config.NumberColumn(format="%d"),
-                    "Diferencia total": st.column_config.NumberColumn(format="%+d"),
-                    "ERI %"          : st.column_config.NumberColumn(format="%.1f%%"),
+                    "Veces con ajuste": st.column_config.NumberColumn(format="%d"),
+                    "Diferencia prom.": st.column_config.NumberColumn(format="%.1f"),
                 }
             )
 
